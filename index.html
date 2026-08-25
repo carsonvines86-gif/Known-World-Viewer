@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=8,user-scalable=no"><title>The Known World</title><link rel="stylesheet" href="style.css"></head><body>
+<canvas id="map"></canvas>
+<div id="toolbar"><b>The Known World v0.9 Atlas</b>
+<select id="layer"><option value="political">Political</option><option value="continent">Continent</option><option value="elevation">Elevation</option><option value="biome">Biome</option><option value="landcover">Land cover</option><option value="koppen">Köppen climate</option><option value="temperature">Temperature</option><option value="precipitation">Precipitation</option></select>
+<button id="layersBtn">Overlays</button><button id="fit">Fit</button></div>
+<div id="overlays" class="panel hidden">
+<label><input type="checkbox" id="rivers" checked> Rivers</label><label><input type="checkbox" id="lakes" checked> Lakes</label><label><input type="checkbox" id="settlements" checked> Settlements</label><label><input type="checkbox" id="labels" checked> Labels</label><label><input type="checkbox" id="stateBorders" checked> Kingdom borders</label><label><input type="checkbox" id="provinceBorders"> Province borders</label><label><input type="checkbox" id="roads"> Roads/routes</label><label><input type="checkbox" id="markers"> Markers</label></div>
+<div id="legend" class="panel"></div>
+<div id="loading" class="panel"><b id="loadTitle">Loading world atlas</b><div id="loadBarTrack"><div id="loadBar"></div></div><b id="loadPercent">0%</b><div id="loadStage">Preparing data…</div><div id="loadChunks"></div><div id="loadCache"></div><div id="loadCells"></div><div id="loadCurrent"></div></div>
+<div id="info" class="panel hidden"></div><div id="status" class="panel"></div><script src="viewer.js"></script></body></html>
