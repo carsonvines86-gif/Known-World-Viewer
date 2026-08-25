@@ -1,0 +1,53 @@
+let M,C=[],loaded=new Map(),cv=document.getElementById('map'),ctx=cv.getContext('2d'),layer=document.getElementById('layer'),info=document.getElementById('info'),status=document.getElementById('status'),loading=document.getElementById('loading');let W,H,dpr=1,s=1,ox=0,oy=0,drag=false,lx=0,ly=0;
+function hash(v){v=String(v??'');let h=2166136261;for(let i=0;i<v.length;i++){h^=v.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function color(o){let k=layer.value,v=o[k];if(['elevation_model_units','meanAnnualTemperatureF','estimatedAnnualPrecipitationIn'].includes(k)){let n=+v,a=k==='meanAnnualTemperatureF'?-20:0,b=k==='elevation_model_units'?100:k==='meanAnnualTemperatureF'?110:120,t=Math.max(0,Math.min(1,(n-a)/(b-a)));return `hsl(${220-210*t} 55% ${42+12*t}%)`}return `hsl(${hash(v)%360} 42% 55%)`}
+function px(x){return x*s+ox}function py(y){return-y*s+oy}
+function fit(){let b=M.bounds;s=Math.min(W/(b[1]-b[0]),H/(b[3]-b[2]))*.94;ox=(W-(b[1]-b[0])*s)/2-b[0]*s;oy=(H-(b[3]-b[2])*s)/2+b[3]*s;loadVisible()}
+function visibleChunk(m){let [minx,maxx,miny,maxy]=M.bounds,[nx,ny]=M.grid,dx=(maxx-minx)/nx,dy=(maxy-miny)/ny;let x0=(0-ox)/s,x1=(W-ox)/s,y1=(oy-0)/s,y0=(oy-H)/s;let cx0=Math.max(0,Math.floor((x0-minx)/dx)),cx1=Math.min(nx-1,Math.floor((x1-minx)/dx)),cy0=Math.max(0,Math.floor((y0-miny)/dy)),cy1=Math.min(ny-1,Math.floor((y1-miny)/dy));return m.x>=cx0&&m.x<=cx1&&m.y>=cy0&&m.y<=cy1}
+function loadedCellCount(){let n=0;for(let a of loaded.values())if(a)n+=a.length;return n}
+function cachedChunkCount(){let n=0;for(let a of loaded.values())if(a)n++;return n}
+function setLoad(pct,stage,done,total,current=''){
+ loading.style.display='block';
+ document.getElementById('loadBar').style.width=`${Math.max(0,Math.min(100,pct))}%`;
+ document.getElementById('loadPercent').textContent=`${Math.round(pct)}%`;
+ document.getElementById('loadStage').textContent=stage;
+ document.getElementById('loadChunks').textContent=`Required chunks: ${done} / ${total}`;
+ document.getElementById('loadCache').textContent=`Cached globally: ${cachedChunkCount()} / ${M.chunks.length}`;
+ document.getElementById('loadCells').textContent=`Cells loaded: ${loadedCellCount().toLocaleString()} / ${M.count.toLocaleString()}`;
+ document.getElementById('loadCurrent').textContent=current?`Current: ${current}`:'';
+}
+async function loadVisible(){
+ let need=M.chunks.filter(visibleChunk), missing=need.filter(m=>!loaded.has(m.file)||loaded.get(m.file)===null);
+ let already=need.length-missing.length,done=already,total=need.length;
+ if(!missing.length){draw();return}
+ setLoad(total?already/total*85:0,'Downloading map data…',done,total);
+ for(let m of missing){
+   if(!loaded.has(m.file))loaded.set(m.file,null);
+   setLoad(total?done/total*85:0,'Downloading map data…',done,total,m.file);
+   try{
+     let r=await fetch(m.file);
+     if(!r.ok)throw new Error(`${r.status} ${r.statusText}`);
+     let d=await r.json();
+     loaded.set(m.file,d);
+     done++;
+     setLoad(total?done/total*85:85,'Parsing detailed cells…',done,total,m.file);
+   }catch(e){
+     loaded.delete(m.file);
+     setLoad(total?done/total*85:0,`Load failed: ${e.message}`,done,total,m.file);
+     return;
+   }
+ }
+ setLoad(92,'Rendering polygons…',done,total);
+ await new Promise(requestAnimationFrame);
+ draw();
+ setLoad(100,'Map ready',done,total);
+ setTimeout(()=>loading.style.display='none',300);
+}
+function draw(){ctx.fillStyle='#8fb9ce';ctx.fillRect(0,0,W,H);let count=0;for(let [f,a] of loaded){if(!a)continue;for(let o of a){let p=o.polygon;if(!p||!p.length)continue;ctx.beginPath();ctx.moveTo(px(p[0][0]),py(p[0][1]));for(let i=1;i<p.length;i++)ctx.lineTo(px(p[i][0]),py(p[i][1]));ctx.closePath();ctx.fillStyle=color(o);ctx.fill();count++}}status.textContent=`${count.toLocaleString()} detailed ~5-mile cells loaded`; }
+function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);draw()}
+function inspect(ex,ey){let wx=(ex-ox)/s,wy=(oy-ey)/s,best=null,bd=1e99;for(let a of loaded.values()){if(!a)continue;for(let o of a){let c=o.center,dd=(c[0]-wx)**2+(c[1]-wy)**2;if(dd<bd){bd=dd;best=o}}}if(best){info.innerHTML='<b>~5-mile cell</b><table>'+Object.entries(best).filter(([k])=>k!=='polygon').map(([k,v])=>`<tr><td>${k}</td><td>${typeof v==='object'?JSON.stringify(v):String(v??'')}</td></tr>`).join('')+'</table>';info.style.display='block'}}
+cv.onpointerdown=e=>{drag=true;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId)};cv.onpointermove=e=>{if(drag){ox+=e.clientX-lx;oy+=e.clientY-ly;lx=e.clientX;ly=e.clientY;draw()}};cv.onpointerup=e=>{drag=false;loadVisible()};cv.ondblclick=e=>inspect(e.clientX,e.clientY);
+cv.addEventListener('wheel',e=>{e.preventDefault();let k=Math.exp(-e.deltaY*.001),wx=(e.clientX-ox)/s,wy=(oy-e.clientY)/s;s*=k;ox=e.clientX-wx*s;oy=e.clientY+wy*s;loadVisible()},{passive:false});
+let pd=0,ps=1;cv.addEventListener('touchstart',e=>{if(e.touches.length===2){drag=false;pd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);ps=s}},{passive:true});cv.addEventListener('touchmove',e=>{if(e.touches.length===2&&pd){let d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);s=ps*d/pd;draw()}},{passive:true});cv.addEventListener('touchend',()=>loadVisible(),{passive:true});
+layer.onchange=draw;document.getElementById('fit').onclick=fit;addEventListener('resize',resize);
+fetch('manifest.json').then(r=>r.json()).then(m=>{M=m;resize();fit()}).catch(e=>loading.textContent='LOAD ERROR: '+e);
